@@ -18,8 +18,10 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -89,6 +91,9 @@ type Work struct {
 	// Optional.
 	ProxyAddr *url.URL
 
+	// RandomIP enables random IP address generation for X-Forwarded-For header
+	RandomIP bool
+
 	// Writer is where results will be written. If nil, results are written to stdout.
 	Writer io.Writer
 
@@ -112,6 +117,8 @@ func (b *Work) Init() {
 	b.initOnce.Do(func() {
 		b.results = make(chan *result, min(b.C*1000, maxResult))
 		b.stopCh = make(chan struct{}, b.C)
+		// Seed random number generator for IP generation
+		rand.Seed(time.Now().UnixNano())
 	})
 }
 
@@ -144,6 +151,14 @@ func (b *Work) Finish() {
 	b.report.finalize(total)
 }
 
+func generateRandomIP() string {
+	return fmt.Sprintf("%d.%d.%d.%d",
+		rand.Intn(255)+1,
+		rand.Intn(255)+1,
+		rand.Intn(255)+1,
+		rand.Intn(255)+1)
+}
+
 func (b *Work) makeRequest(c *http.Client) {
 	s := now()
 	var size int64
@@ -155,6 +170,10 @@ func (b *Work) makeRequest(c *http.Client) {
 		req = b.RequestFunc()
 	} else {
 		req = cloneRequest(b.Request, b.RequestBody)
+	}
+
+	if b.RandomIP {
+		req.Header.Set("X-Forwarded-For", generateRandomIP())
 	}
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(info httptrace.DNSStartInfo) {

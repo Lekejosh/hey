@@ -64,6 +64,7 @@ var (
 	disableKeepAlives  = flag.Bool("disable-keepalive", false, "")
 	disableRedirects   = flag.Bool("disable-redirects", false, "")
 	proxyAddr          = flag.String("x", "", "")
+	randomIP           = flag.Bool("random-ip", false, "")
 )
 
 var usage = `Usage: hey [options...] <url>
@@ -99,6 +100,8 @@ Options:
   -disable-keepalive    Disable keep-alive, prevents re-use of TCP
                         connections between different HTTP requests.
   -disable-redirects    Disable following of HTTP redirects
+  -random-ip            Use random IP addresses in X-Forwarded-For header
+                        to avoid rate limiting.
   -cpus                 Number of used cpu cores.
                         (default for current machine is %d cores)
 `
@@ -234,13 +237,14 @@ func main() {
 		H2:                 *h2,
 		ProxyAddr:          proxyURL,
 		Output:             *output,
+		RandomIP:           *randomIP,
 	}
 	w.Init()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
 	go func() {
-		<-c
+		<-sigCh
 		w.Stop()
 	}()
 	if dur > 0 {
